@@ -1,12 +1,16 @@
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updateProfile as fbUpdateProfile,
   type User,
 } from 'firebase/auth';
-import { setDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { setDoc, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase/firebase';
 import type { UserProfile, UserRole } from '@/types';
 import { uploadProfilePhoto } from './storage';
@@ -28,6 +32,11 @@ export interface RegisterInput {
   bio?: string;
   linkedIn?: string;
   photoFile?: File | null;
+}
+
+/** Remove undefined values so Firestore setDoc/updateDoc doesn't reject them. */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
 }
 
 export async function registerWithEmail(input: RegisterInput): Promise<UserProfile> {
@@ -54,15 +63,16 @@ export async function registerWithEmail(input: RegisterInput): Promise<UserProfi
     isOnline: true,
   };
 
-  await setDoc(doc(db, 'users', user.uid), {
+  await setDoc(doc(db, 'users', user.uid), stripUndefined({
     ...profile,
     nameLower: input.name.trim().toLowerCase(),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }));
 
-  await incrementStat('totalUsers');
-  await incrementStat(input.role === 'student' ? 'students' : 'alumni');
+  // Fire-and-forget: stat increments should not block or fail registration.
+  incrementStat('totalUsers').catch(() => {});
+  incrementStat(input.role === 'student' ? 'students' : 'alumni').catch(() => {});
 
   let photoUrl = '';
   if (input.photoFile) {
@@ -106,4 +116,80 @@ export function getCurrentAuthUser(): User | null {
 
 export function getAuthToken(): Promise<string> {
   return auth.currentUser ? auth.currentUser.getIdToken() : Promise.reject(new Error('Not signed in'));
+}
+
+// ==================== GOOGLE AUTH ====================
+
+const googleProvider = new GoogleAuthProvider();
+
+export async function signInWithGoogle(): Promise<User> {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, googleProvider);
+      return auth.currentUser!;
+    }
+    throw err;
+  }
+}
+
+export async function handleGoogleRedirectResult(): Promise<User | null> {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result?.user) return result.user;
+  } catch {
+    // Redirect result error — caller should handle via onAuthStateChanged.
+  }
+  return null;
+}
+
+export async function getOrCreateGoogleProfile(user: User): Promise<UserProfile> {
+  const ref = doc(db, 'users', user.uid);
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+    const data = snap.data() as Omit<UserProfile, 'uid'>;
+    const patch: Record<string, string | ReturnType<typeof serverTimestamp>> = { updatedAt: serverTimestamp() };
+    if (user.displayName && user.displayName !== data.name) {
+      patch.name = user.displayName;
+      patch.nameLower = user.displayName.toLowerCase();
+    }
+    if (user.photoURL && user.photoURL !== data.profileImageUrl) {
+      patch.profileImageUrl = user.photoURL;
+    }
+    if (Object.keys(patch).length > 1) {
+      await updateDoc(ref, patch);
+    }
+    return { uid: snap.id, ...data, ...patch } as UserProfile;
+  }
+
+  const profile: Omit<UserProfile, 'uid'> = {
+    name: user.displayName || user.email?.split('@')[0] || 'Google User',
+    email: user.email || '',
+    role: 'student',
+    profileImageUrl: user.photoURL ?? undefined,
+    isActive: true,
+    isOnline: true,
+  };
+
+  await setDoc(ref, stripUndefined({
+    ...profile,
+    nameLower: profile.name.toLowerCase(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+
+  // Fire-and-forget: stat increments should not block or fail profile creation.
+  incrementStat('totalUsers').catch(() => {});
+  incrementStat('students').catch(() => {});
+
+  return {
+    uid: user.uid,
+    ...profile,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  } as UserProfile;
 }

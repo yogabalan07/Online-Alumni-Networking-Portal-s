@@ -20,8 +20,10 @@ interface AuthContextValue {
   user: UserProfile | null;
   authUser: User | null;
   authLoading: boolean;
+  profileLoading: boolean;
   disabledNotice: string | null;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (input: authService.RegisterInput) => Promise<UserProfile>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -34,23 +36,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [disabledNotice, setDisabledNotice] = useState<string | null>(null);
   const unsubUserRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let active = true;
+
+    // Handle redirect result from Google sign-in on page load.
+    authService.handleGoogleRedirectResult().catch(() => {});
+
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (!active) return;
       setAuthUser(fbUser);
 
       if (fbUser) {
-        const profile = await getUser(fbUser.uid).catch(() => null);
+        // Ensure authLoading is true while fetching the Firestore profile so
+        // ProtectedRoute / RoleHome render a loader instead of redirecting
+        // to /login before the profile is available.
+        setAuthLoading(true);
+        setProfileLoading(true);
+        const profile = await getUser(fbUser.uid).catch((err) => {
+          console.error('[AuthContext] Failed to load user profile:', err);
+          return null;
+        });
         if (!active) return;
 
         if (!profile) {
-          await authService.logout().catch(() => undefined);
-          setUser(null);
-          setAuthLoading(false);
+          console.warn('[AuthContext] No Firestore profile found for uid:', fbUser.uid);
+          // First-time Google user — create profile from Firebase Auth data.
+          try {
+            const newProfile = await authService.getOrCreateGoogleProfile(fbUser);
+            if (!active) return;
+            setDisabledNotice(null);
+            setUser(newProfile);
+            setAuthLoading(false);
+            setProfileLoading(false);
+            initPresence(newProfile.uid);
+            watchProfile(newProfile.uid);
+          } catch (err) {
+            console.error('[AuthContext] Failed to create Google profile:', err);
+            // Profile creation failed — sign out to prevent stuck state.
+            await authService.logout().catch(() => undefined);
+            setUser(null);
+            setAuthLoading(false);
+            setProfileLoading(false);
+          }
           return;
         }
 
@@ -61,53 +92,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await authService.logout().catch(() => undefined);
           setUser(null);
           setAuthLoading(false);
+          setProfileLoading(false);
           return;
         }
 
         setDisabledNotice(null);
         setUser(profile);
         setAuthLoading(false);
+        setProfileLoading(false);
         initPresence(profile.uid);
-
-        // Live watch so admins' deactivation / role changes apply immediately.
-        unsubUserRef.current?.();
-        unsubUserRef.current = null;
-        watchUser(profile.uid, (up) => {
-          if (!active) return;
-          if (!up) return;
-          if (!up.isActive) {
-            setDisabledNotice(
-              'Your account has been disabled. Please contact an administrator.',
-            );
-            authService.logout().catch(() => undefined);
-            setUser(null);
-            return;
-          }
-          setUser((prev) => (prev && prev.uid === up.uid ? { ...up } : prev));
-        }).then((u) => {
-          if (active) unsubUserRef.current = u;
-        });
+        watchProfile(profile.uid);
       } else {
         unsubUserRef.current?.();
         unsubUserRef.current = null;
         setUser(null);
         setAuthLoading(false);
+        setProfileLoading(false);
       }
     });
 
-    window.addEventListener('beforeunload', () => {
-      if (authUser) void setOfflineNow(authUser.uid);
-    });
+    function watchProfile(uid: string) {
+      unsubUserRef.current?.();
+      unsubUserRef.current = null;
+      watchUser(uid, (up) => {
+        if (!active) return;
+        if (!up) return;
+        if (!up.isActive) {
+          setDisabledNotice(
+            'Your account has been disabled. Please contact an administrator.',
+          );
+          authService.logout().catch(() => undefined);
+          setUser(null);
+          return;
+        }
+        setUser((prev) => (prev && prev.uid === up.uid ? { ...up } : prev));
+      }).then((u) => {
+        if (active) unsubUserRef.current = u;
+      });
+    }
+
+    const handleBeforeUnload = () => {
+      if (auth.currentUser) void setOfflineNow(auth.currentUser.uid);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       active = false;
       unsub();
       unsubUserRef.current?.();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [authUser]);
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     await authService.loginWithEmail(email, password);
+  }, []);
+
+  const loginWithGoogle = useCallback(async () => {
+    await authService.signInWithGoogle();
   }, []);
 
   const register = useCallback(async (input: authService.RegisterInput) => {
@@ -137,14 +179,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       authUser,
       authLoading,
+      profileLoading,
       disabledNotice,
       login,
+      loginWithGoogle,
       register,
       logout,
       resetPassword,
       refreshProfile,
     }),
-    [user, authUser, authLoading, disabledNotice, login, register, logout, resetPassword, refreshProfile],
+    [user, authUser, authLoading, profileLoading, disabledNotice, login, loginWithGoogle, register, logout, resetPassword, refreshProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { GraduationCap, ImagePlus, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Textarea, FieldError } from '@/components/ui/input';
@@ -47,7 +47,6 @@ const EMPTY: FormState = {
 export default function RegisterPage() {
   const { register } = useAuth();
   const { success, error } = useToast();
-  const navigate = useNavigate();
 
   const [role, setRole] = useState<UserRole>('student');
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -134,7 +133,6 @@ export default function RegisterPage() {
         photoFile: photo,
       });
       success('Account created successfully. Welcome!');
-      navigate('/dashboard', { replace: true });
     } catch (err) {
       setFormError(getErrorMessage(err, 'Registration failed. Please try again.'));
     } finally {
