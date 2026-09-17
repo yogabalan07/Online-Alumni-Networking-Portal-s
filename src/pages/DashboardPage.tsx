@@ -63,6 +63,7 @@ export default function DashboardPage() {
   const { conversations } = useConversations(user?.uid);
   const { incomingPending } = useConnections(user?.uid);
   const { requests: mentorshipRequests } = useMentorship(user?.uid);
+  const completion = useProfileCompletion(user!);
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -115,8 +116,6 @@ export default function DashboardPage() {
 
   if (!user) return null;
   if (user.role === 'admin') return <Navigate to="/admin" replace />;
-
-  const completion = useProfileCompletion(user);
   const pendingMentorship = mentorshipRequests.filter(
     (r) => r.status === 'pending' && (user.role === 'alumni' ? r.alumniId === user.uid : r.studentId === user.uid),
   );

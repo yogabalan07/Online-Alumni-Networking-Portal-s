@@ -35,6 +35,7 @@ export function Dropdown({ trigger, children, align = 'right', className, open: 
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('keydown', keyHandler);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   return (

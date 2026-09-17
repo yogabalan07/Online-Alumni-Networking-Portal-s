@@ -37,7 +37,7 @@
     },
     {
       "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
+      "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "conversationId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
@@ -45,7 +45,7 @@
     },
     {
       "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
+      "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "receiverId", "order": "ASCENDING" },
         { "fieldPath": "readAt", "order": "ASCENDING" },
@@ -54,7 +54,7 @@
     },
     {
       "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
+      "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "receiverId", "order": "ASCENDING" },
         { "fieldPath": "deliveredAt", "order": "ASCENDING" },

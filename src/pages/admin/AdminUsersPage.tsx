@@ -44,6 +44,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     fetchUsers(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roleFilter]);
 
   const handleSearch = () => {
