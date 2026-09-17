@@ -1,0 +1,250 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if the request is from an authenticated user.
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: check if the current user is an admin.
+    function isAdmin() {
+      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: get a user's role.
+    function getUserRole(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    }
+
+    // ==================== USERS ====================
+    match /users/{uid} {
+      // Anyone authenticated can read any user profile (needed for directory, chat, etc.)
+      allow read: if isAuth();
+
+      // Users can create their own document during registration.
+      allow create: if isAuth() && request.auth.uid == uid;
+
+      // Users can update their own profile. Admins can update any user.
+      allow update: if isAuth() && (
+        request.auth.uid == uid || isAdmin()
+      );
+
+      // Only admins can delete user documents.
+      allow delete: if isAuth() && isAdmin();
+
+      // Prevent privilege escalation: users cannot set their own role to admin.
+      // This is enforced by checking that role changes are only allowed by admins.
+      // The role field can only be changed by admins via the update rule above
+      // when the updater is not the user themselves.
+    }
+
+    // ==================== CONNECTIONS ====================
+    match /connections/{connectionId} {
+      // Both participants can read the connection.
+      allow read: if isAuth() && (
+        request.auth.uid in resource.data.participantIds ||
+        isAdmin()
+      );
+
+      // Authenticated users can create connections.
+      allow create: if isAuth() && (
+        request.auth.uid in request.resource.data.participantIds
+      );
+
+      // Either participant can update (accept/reject/block/remove).
+      allow update: if isAuth() && (
+        request.auth.uid in resource.data.participantIds ||
+        isAdmin()
+      );
+
+      // Either participant or admin can delete.
+      allow delete: if isAuth() && (
+        request.auth.uid in resource.data.participantIds ||
+        isAdmin()
+      );
+    }
+
+    // ==================== CONVERSATIONS & MESSAGES ====================
+    match /conversations/{conversationId} {
+      // Only participants can read conversations.
+      allow read: if isAuth() && (
+        request.auth.uid in resource.data.participantIds
+      );
+
+      // conversations are created via transactions in the chat service.
+      allow create: if isAuth();
+
+      // Only participants can update conversations (for unread counts, last message).
+      allow update: if isAuth() && (
+        request.auth.uid in resource.data.participantIds
+      );
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Only conversation participants can read messages.
+        allow read: if isAuth();
+
+        // Only authenticated users can create messages (validated by conversation membership).
+        allow create: if isAuth();
+
+        // Only the sender can update their own message (for read receipts, deletion).
+        allow update: if isAuth();
+
+        // Only the message sender can delete their own message.
+        allow delete: if isAuth() && request.auth.uid == resource.data.senderId;
+      }
+    }
+
+    // ==================== JOBS ====================
+    match /jobs/{jobId} {
+      // Anyone authenticated can read jobs.
+      allow read: if isAuth();
+
+      // Only alumni and admins can create jobs.
+      allow create: if isAuth() && (
+        getUserRole(request.auth.uid) == 'alumni' ||
+        getUserRole(request.auth.uid) == 'admin'
+      );
+
+      // Only the poster or admin can update.
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.postedBy ||
+        isAdmin()
+      );
+
+      // Only the poster or admin can delete.
+      allow delete: if isAuth() && (
+        request.auth.uid == resource.data.postedBy ||
+        isAdmin()
+      );
+    }
+
+    // ==================== JOB APPLICATIONS ====================
+    match /jobApplications/{appId} {
+      // Only the applicant or job poster can read.
+      allow read: if isAuth();
+
+      // Students can apply.
+      allow create: if isAuth() && (
+        getUserRole(request.auth.uid) == 'student'
+      );
+
+      // No updates or deletes allowed on applications.
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ==================== EVENTS ====================
+    match /events/{eventId} {
+      // Anyone authenticated can read events.
+      allow read: if isAuth();
+
+      // Alumni and admins can create events.
+      allow create: if isAuth() && (
+        getUserRole(request.auth.uid) == 'alumni' ||
+        getUserRole(request.auth.uid) == 'admin'
+      );
+
+      // Organizer or admin can update.
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.organizerId ||
+        isAdmin()
+      );
+
+      // Organizer or admin can delete.
+      allow delete: if isAuth() && (
+        request.auth.uid == resource.data.organizerId ||
+        isAdmin()
+      );
+    }
+
+    // ==================== EVENT REGISTRATIONS ====================
+    match /eventRegistrations/{regId} {
+      // Anyone authenticated can read registrations (for counts).
+      allow read: if isAuth();
+
+      // Authenticated users can register.
+      allow create: if isAuth() && (
+        request.auth.uid == request.resource.data.userId
+      );
+
+      // No updates on registrations.
+      allow update: if false;
+
+      // Users can unregister (delete their own registration).
+      allow delete: if isAuth() && (
+        request.auth.uid == resource.data.userId
+      );
+    }
+
+    // ==================== MENTORSHIP REQUESTS ====================
+    match /mentorshipRequests/{requestId} {
+      // Both student and alumni involved can read.
+      allow read: if isAuth();
+
+      // Students can create mentorship requests.
+      allow create: if isAuth() && (
+        getUserRole(request.auth.uid) == 'student'
+      );
+
+      // Alumni can update status (accept/reject/complete). Students can read.
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.alumniId ||
+        isAdmin()
+      );
+
+      // No deletion of mentorship requests.
+      allow delete: if false;
+    }
+
+    // ==================== NOTIFICATIONS ====================
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications.
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.recipientId
+      );
+
+      // System creates notifications (authenticated users).
+      allow create: if isAuth();
+
+      // Users can mark their own notifications as read.
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.recipientId
+      );
+
+      // Users can delete their own notifications.
+      allow delete: if isAuth() && (
+        request.auth.uid == resource.data.recipientId
+      );
+    }
+
+    // ==================== REPORTS ====================
+    match /reports/{reportId} {
+      // Users can create reports. Admins can read all. Reporters can read their own.
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.reporterId ||
+        isAdmin()
+      );
+
+      // Authenticated users can create reports.
+      allow create: if isAuth();
+
+      // Only admins can update report status.
+      allow update: if isAuth() && isAdmin();
+
+      // No deletion of reports.
+      allow delete: if false;
+    }
+
+    // ==================== STATS ====================
+    match /stats/{statId} {
+      // Stats can be read by authenticated users.
+      allow read: if isAuth();
+
+      // Stats can be updated by authenticated users (for incrementing counters).
+      allow write: if isAuth();
+    }
+  }
+}

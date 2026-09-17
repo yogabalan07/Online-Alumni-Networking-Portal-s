@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper: check if the request is from an authenticated user.
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: check if the file size is within limits.
+    function isValidSize(maxSize) {
+      return request.resource.size <= maxSize;
+    }
+
+    // Helper: check if the content type is allowed.
+    function isAllowedImageType() {
+      return request.resource.contentType in [
+        'image/jpeg',
+        'image/png',
+        'image/webp'
+      ];
+    }
+
+    function isAllowedDocType() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+        'text/markdown',
+        'application/rtf'
+      ];
+    }
+
+    // ==================== PROFILE IMAGES ====================
+    // Users can upload their own profile photo.
+    match /users/{userId}/profile/{fileName} {
+      // Anyone authenticated can read profile images (for display).
+      allow read: if isAuth();
+
+      // Users can only upload their own profile image.
+      allow create: if isAuth() && request.auth.uid == userId
+        && isAllowedImageType()
+        && isValidSize(10 * 1024 * 1024); // 10 MB
+
+      // Users can update their own profile image.
+      allow update: if isAuth() && request.auth.uid == userId;
+
+      // Users can delete their own profile image.
+      allow delete: if isAuth() && request.auth.uid == userId;
+    }
+
+    // ==================== CHAT ATTACHMENTS ====================
+    // Chat files are stored under chat/{conversationId}/{uid}/
+    match /chat/{conversationId}/{uid}/{fileName} {
+      // Both conversation participants can read chat attachments.
+      // Simplified: any authenticated user can read (conversation-level security is in Firestore).
+      allow read: if isAuth();
+
+      // Users can upload to their own folder within a conversation.
+      allow create: if isAuth() && request.auth.uid == uid
+        && (isAllowedImageType() || isAllowedDocType())
+        && isValidSize(15 * 1024 * 1024); // 15 MB
+
+      // Users can update their own uploads.
+      allow update: if isAuth() && request.auth.uid == uid;
+
+      // Users can delete their own uploads.
+      allow delete: if isAuth() && request.auth.uid == uid;
+    }
+
+    // Default: deny all other access.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

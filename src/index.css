@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 97%;
+    --foreground: 222 47% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 8%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 47% 14%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 9% 44%;
+    --accent: 244 70% 95%;
+    --accent-foreground: 243 60% 40%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 160 62% 35%;
+    --success-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 86%;
+    --ring: 243 75% 59%;
+    --radius: 0.625rem;
+    --chat-bg: 218 33% 93%;
+    --chat-sent: 214 100% 90%;
+    --chat-received: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 220 14% 92%;
+    --card: 222 40% 9%;
+    --card-foreground: 220 14% 92%;
+    --popover: 222 40% 9%;
+    --popover-foreground: 220 14% 92%;
+    --primary: 243 75% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 16%;
+    --secondary-foreground: 220 14% 90%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 220 9% 62%;
+    --accent: 243 40% 20%;
+    --accent-foreground: 243 70% 88%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 20%;
+    --input: 220 13% 22%;
+    --chat-bg: 222 40% 10%;
+    --chat-sent: 243 45% 22%;
+    --chat-received: 222 40% 14%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+@layer components {
+  .chat-pattern {
+    background-image:
+      radial-gradient(circle at 25% 25%, hsl(var(--primary) / 0.05) 1px, transparent 1px),
+      radial-gradient(circle at 75% 75%, hsl(var(--primary) / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
