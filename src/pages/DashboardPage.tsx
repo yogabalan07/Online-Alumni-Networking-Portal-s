@@ -116,6 +116,8 @@ export default function DashboardPage() {
 
   if (!user) return null;
   if (user.role === 'admin') return <Navigate to="/admin" replace />;
+
+  console.log('[DashboardPage] Rendering dashboard for role:', user.role, 'Redirect path:', `/dashboard`);
   const pendingMentorship = mentorshipRequests.filter(
     (r) => r.status === 'pending' && (user.role === 'alumni' ? r.alumniId === user.uid : r.studentId === user.uid),
   );

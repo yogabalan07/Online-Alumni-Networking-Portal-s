@@ -7,6 +7,7 @@ import { FullPageLoader } from '@/components/ui/select';
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
+import RoleSelectionPage from '@/pages/auth/RoleSelectionPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AlumniDirectoryPage from '@/pages/AlumniDirectoryPage';
 import MessagesPage from '@/pages/MessagesPage';
@@ -38,6 +39,7 @@ function RoleHome() {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  console.log('[RoleHome] User role:', user.role, 'Redirecting to:', user.role === 'admin' ? '/admin' : '/dashboard');
   return <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace />;
 }
 
@@ -61,6 +63,9 @@ export function AppRoutes() {
         }
       />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
+      {/* Role selection for first-time Google users — accessible without a full profile. */}
+      <Route path="/role-selection" element={<RoleSelectionPage />} />
 
       <Route
         element={

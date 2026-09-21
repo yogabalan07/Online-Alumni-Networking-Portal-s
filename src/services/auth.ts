@@ -146,6 +146,63 @@ export async function handleGoogleRedirectResult(): Promise<User | null> {
   return null;
 }
 
+/** Check if a Google-authenticated user has no Firestore profile yet (first-time sign-in). */
+export async function isGoogleUserNew(user: User): Promise<boolean> {
+  const snap = await getDoc(doc(db, 'users', user.uid));
+  return !snap.exists();
+}
+
+/**
+ * Called after a first-time Google user selects their role.
+ * Creates the Firestore user document with the chosen role.
+ */
+export async function completeGoogleRoleSelection(
+  user: User,
+  role: UserRole,
+): Promise<UserProfile> {
+  const ref = doc(db, 'users', user.uid);
+  const snap = await getDoc(ref);
+
+  // If profile already exists (race condition / double-click), just return it.
+  if (snap.exists()) {
+    return { uid: snap.id, ...(snap.data() as Omit<UserProfile, 'uid'>) } as UserProfile;
+  }
+
+  const profile: Omit<UserProfile, 'uid'> = {
+    name: user.displayName || user.email?.split('@')[0] || 'Google User',
+    email: user.email || '',
+    role,
+    profileImageUrl: user.photoURL ?? undefined,
+    isActive: true,
+    isOnline: true,
+    verified: role === 'alumni' ? false : undefined,
+  };
+
+  await setDoc(ref, stripUndefined({
+    ...profile,
+    nameLower: profile.name.toLowerCase(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+
+  console.log('[Auth] Created Google profile with role:', role, 'for uid:', user.uid);
+
+  // Fire-and-forget: stat increments should not block or fail profile creation.
+  incrementStat('totalUsers').catch(() => {});
+  incrementStat(role === 'student' ? 'students' : 'alumni').catch(() => {});
+
+  return {
+    uid: user.uid,
+    ...profile,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  } as UserProfile;
+}
+
+/**
+ * @deprecated Use `isGoogleUserNew` + `completeGoogleRoleSelection` instead.
+ * Kept for backward compatibility only.
+ */
 export async function getOrCreateGoogleProfile(user: User): Promise<UserProfile> {
   const ref = doc(db, 'users', user.uid);
   const snap = await getDoc(ref);
@@ -182,7 +239,6 @@ export async function getOrCreateGoogleProfile(user: User): Promise<UserProfile>
     updatedAt: serverTimestamp(),
   }));
 
-  // Fire-and-forget: stat increments should not block or fail profile creation.
   incrementStat('totalUsers').catch(() => {});
   incrementStat('students').catch(() => {});
 
