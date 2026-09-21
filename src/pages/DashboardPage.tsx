@@ -13,8 +13,9 @@ import {
   UserPlus,
   Users,
   X,
+  Heart,
 } from 'lucide-react';
-import type { EventItem, Job, UserProfile } from '@/types';
+import type { EventItem, Job, Post, UserProfile } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useConversations } from '@/hooks/useConversations';
@@ -26,6 +27,10 @@ import { listenEvents } from '@/services/events';
 import { searchAlumni } from '@/services/users';
 import { getConversationId } from '@/services/chat';
 import { respondToConnectionRequest, sendConnectionRequest } from '@/services/connections';
+import { listenPosts } from '@/services/posts';
+import { listenFollowers, listenFollowing } from '@/services/follows';
+import { PostComposer } from '@/components/social/PostComposer';
+import { PostCard } from '@/components/social/PostCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -69,6 +74,9 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [recommended, setRecommended] = useState<UserProfile[]>([]);
   const [loadingRecommended, setLoadingRecommended] = useState(true);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
 
   const recentConversations = conversations.slice(0, 5);
   const conversationPartnerIds = recentConversations
@@ -89,11 +97,21 @@ export default function DashboardPage() {
     const unsubEvents = listenEvents((list) => {
       setEvents(list.filter((e) => tsNum(e.date) >= Date.now()).slice(0, 3));
     }, 50);
-    return () => {
-      unsubJobs();
-      unsubEvents();
-    };
+    return () => { unsubJobs(); unsubEvents(); };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = listenPosts((list) => setPosts(list.slice(0, 5)));
+    return unsub;
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub1 = listenFollowers(user.uid, (f) => setFollowerCount(f.length));
+    const unsub2 = listenFollowing(user.uid, (f) => setFollowingCount(f.length));
+    return () => { unsub1(); unsub2(); };
+  }, [user, user?.uid]);
 
   useEffect(() => {
     if (!user || user.role !== 'student') {
@@ -103,21 +121,15 @@ export default function DashboardPage() {
     let active = true;
     setLoadingRecommended(true);
     searchAlumni({}, null)
-      .then((page) => {
-        if (!active) return;
-        setRecommended(page.items.slice(0, 4));
-      })
+      .then((page) => { if (active) setRecommended(page.items.slice(0, 4)); })
       .catch(() => undefined)
       .finally(() => active && setLoadingRecommended(false));
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [user]);
 
   if (!user) return null;
   if (user.role === 'admin') return <Navigate to="/admin" replace />;
 
-  console.log('[DashboardPage] Rendering dashboard for role:', user.role, 'Redirect path:', `/dashboard`);
   const pendingMentorship = mentorshipRequests.filter(
     (r) => r.status === 'pending' && (user.role === 'alumni' ? r.alumniId === user.uid : r.studentId === user.uid),
   );
@@ -128,9 +140,7 @@ export default function DashboardPage() {
     try {
       await respondToConnectionRequest(connection, true, user.name);
       success('Connection accepted. You can now chat.');
-    } catch (e) {
-      error(getErrorMessage(e, 'Could not accept the request.'));
-    }
+    } catch (e) { error(getErrorMessage(e, 'Could not accept the request.')); }
   };
 
   const rejectConnection = async (requesterId: string) => {
@@ -139,18 +149,14 @@ export default function DashboardPage() {
     try {
       await respondToConnectionRequest(connection, false, user.name);
       success('Connection request declined.');
-    } catch (e) {
-      error(getErrorMessage(e, 'Could not decline the request.'));
-    }
+    } catch (e) { error(getErrorMessage(e, 'Could not decline the request.')); }
   };
 
   const quickConnect = async (alumni: UserProfile) => {
     try {
       await sendConnectionRequest(user.uid, alumni.uid, user.name);
       success(`Connection request sent to ${alumni.name}.`);
-    } catch (e) {
-      error(getErrorMessage(e, 'Could not send connection request.'));
-    }
+    } catch (e) { error(getErrorMessage(e, 'Could not send connection request.')); }
   };
 
   const openChat = (otherUid: string) => {
@@ -168,7 +174,10 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats */}
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard label="Followers" value={followerCount} icon={Users} hint="People following you" />
+        <StatCard label="Following" value={followingCount} icon={Heart} hint="People you follow" />
         <StatCard
           label="Connections"
           value={incomingPending.length ? `${incomingPending.length} pending` : 'View all'}
@@ -181,17 +190,36 @@ export default function DashboardPage() {
           icon={Users}
           hint={pendingMentorship.length ? 'Awaiting action' : 'Up to date'}
         />
-        <StatCard label="Opportunities" value={jobs.length} icon={Briefcase} hint="Latest postings" />
-        <StatCard
-          label="Upcoming events"
-          value={events.length}
-          icon={CalendarDays}
-          hint="Don't miss out"
-        />
+        <StatCard label="Events" value={events.length} icon={CalendarDays} hint="Upcoming" />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          {/* Post Composer */}
+          <PostComposer />
+
+          {/* Recent Feed */}
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle>Recent posts</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/feed')}>
+                View all <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {posts.length === 0 ? (
+                <EmptyState
+                  icon={Users}
+                  title="No posts yet"
+                  description="Share something with the community."
+                />
+              ) : (
+                posts.map((post) => <PostCard key={post.id} post={post} />)
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent conversations */}
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <CardTitle>Recent conversations</CardTitle>
@@ -205,11 +233,7 @@ export default function DashboardPage() {
                   icon={MessageSquare}
                   title="No conversations yet"
                   description="Connect with alumni and start a chat to see it here."
-                  action={
-                    <Button size="sm" onClick={() => navigate('/alumni')}>
-                      Find alumni
-                    </Button>
-                  }
+                  action={<Button size="sm" onClick={() => navigate('/alumni')}>Find alumni</Button>}
                 />
               ) : (
                 <ul className="divide-y">
@@ -219,26 +243,18 @@ export default function DashboardPage() {
                     const unread = c.unreadCounts?.[user.uid] ?? 0;
                     return (
                       <li key={c.id}>
-                        <button
-                          onClick={() => openChat(otherId)}
-                          className="flex w-full items-center gap-3 py-2.5 text-left"
-                        >
+                        <button onClick={() => openChat(otherId)} className="flex w-full items-center gap-3 py-2.5 text-left">
                           <Avatar src={other?.profileImageUrl} name={other?.name ?? 'User'} size="md" showStatus status={other?.isOnline ? 'online' : 'offline'} />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium">{other?.name ?? 'User'}</p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {c.lastMessageSenderId === user.uid ? 'You: ' : ''}
-                              {c.lastMessage || 'Start the conversation'}
+                              {c.lastMessageSenderId === user.uid ? 'You: ' : ''}{c.lastMessage || 'Start the conversation'}
                             </p>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <span className="text-[11px] text-muted-foreground">
-                              {formatTime(tsNum(c.lastMessageAt ?? c.updatedAt))}
-                            </span>
+                            <span className="text-[11px] text-muted-foreground">{formatTime(tsNum(c.lastMessageAt ?? c.updatedAt))}</span>
                             {unread > 0 && (
-                              <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                                {unread}
-                              </span>
+                              <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{unread}</span>
                             )}
                           </div>
                         </button>
@@ -250,6 +266,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Latest jobs */}
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <CardTitle>Latest opportunities</CardTitle>
@@ -264,18 +281,12 @@ export default function DashboardPage() {
                 <ul className="divide-y">
                   {jobs.map((job) => (
                     <li key={job.id} className="flex items-center gap-3 py-2.5">
-                      <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                        <Briefcase className="h-4 w-4" />
-                      </div>
+                      <div className="rounded-lg bg-primary/10 p-2 text-primary"><Briefcase className="h-4 w-4" /></div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{job.title}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {job.company} · {job.location}
-                        </p>
+                        <p className="truncate text-xs text-muted-foreground">{job.company} · {job.location}</p>
                       </div>
-                      <Badge variant={job.type === 'job' ? 'default' : 'accent'} className="capitalize">
-                        {job.type}
-                      </Badge>
+                      <Badge variant={job.type === 'job' ? 'default' : 'accent'} className="capitalize">{job.type}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -285,50 +296,31 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-5">
+          {/* Profile completion */}
           <Card>
-            <CardHeader>
-              <CardTitle>Profile completion</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Profile completion</CardTitle></CardHeader>
             <CardContent>
               <div className="flex items-center gap-3">
                 <div className="relative h-16 w-16 shrink-0">
                   <svg viewBox="0 0 36 36" className="h-16 w-16 -rotate-90">
                     <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3.5" className="stroke-muted" />
-                    <circle
-                      cx="18"
-                      cy="18"
-                      r="15.5"
-                      fill="none"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      className="stroke-primary"
-                      strokeDasharray={`${(completion / 100) * 97.4} 97.4`}
-                    />
+                    <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3.5" strokeLinecap="round" className="stroke-primary" strokeDasharray={`${(completion / 100) * 97.4} 97.4`} />
                   </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">
-                    {completion}%
-                  </span>
+                  <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{completion}%</span>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {completion === 100 ? 'Profile complete' : 'Complete your profile'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    A complete profile helps others connect with you.
-                  </p>
-                  <Button variant="link" size="sm" className="h-auto px-0" onClick={() => navigate('/profile')}>
-                    Edit profile
-                  </Button>
+                  <p className="text-sm font-medium">{completion === 100 ? 'Profile complete' : 'Complete your profile'}</p>
+                  <p className="text-xs text-muted-foreground">A complete profile helps others connect with you.</p>
+                  <Button variant="link" size="sm" className="h-auto px-0" onClick={() => navigate('/profile')}>Edit profile</Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Connection requests */}
           {incomingPending.length > 0 && (
             <Card>
-              <CardHeader>
-                <CardTitle>Connection requests</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Connection requests</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {incomingPending.slice(0, 3).map((c) => {
                   const requester = userMap[c.requesterId];
@@ -339,34 +331,23 @@ export default function DashboardPage() {
                         <p className="truncate text-sm font-medium">{requester?.name ?? 'User'}</p>
                         <p className="text-[11px] text-muted-foreground">{timeAgo(tsNum(c.createdAt))}</p>
                       </div>
-                      <Button size="iconSm" variant="success" onClick={() => acceptConnection(c.requesterId)} aria-label="Accept request">
-                        <Check className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="iconSm" variant="outline" onClick={() => rejectConnection(c.requesterId)} aria-label="Decline request">
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
+                      <Button size="iconSm" variant="success" onClick={() => acceptConnection(c.requesterId)}><Check className="h-3.5 w-3.5" /></Button>
+                      <Button size="iconSm" variant="outline" onClick={() => rejectConnection(c.requesterId)}><X className="h-3.5 w-3.5" /></Button>
                     </div>
                   );
                 })}
-                <Button variant="link" size="sm" className="h-auto px-0" onClick={() => navigate('/connections')}>
-                  Manage all requests
-                </Button>
+                <Button variant="link" size="sm" className="h-auto px-0" onClick={() => navigate('/connections')}>Manage all requests</Button>
               </CardContent>
             </Card>
           )}
 
+          {/* Recommended alumni */}
           {user.role === 'student' && (
             <Card>
-              <CardHeader>
-                <CardTitle>Recommended alumni</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Recommended alumni</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {loadingRecommended ? (
-                  <>
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </>
+                  <><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></>
                 ) : recommended.length === 0 ? (
                   <EmptyState icon={GraduationCap} title="No alumni yet" />
                 ) : (
@@ -378,30 +359,22 @@ export default function DashboardPage() {
                           <p className="truncate text-sm font-medium">{a.name}</p>
                           <VerifiedBadge verified={a.verified} />
                         </div>
-                        <p className="truncate text-[11px] text-muted-foreground">
-                          {a.jobRole || 'Alumni'}
-                          {a.company ? ` at ${a.company}` : ''}
-                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">{a.jobRole || 'Alumni'}{a.company ? ` at ${a.company}` : ''}</p>
                       </div>
-                      <Button size="iconSm" variant="outline" onClick={() => quickConnect(a)} aria-label={`Connect with ${a.name}`}>
-                        <UserPlus className="h-3.5 w-3.5" />
-                      </Button>
+                      <Button size="iconSm" variant="outline" onClick={() => quickConnect(a)}><UserPlus className="h-3.5 w-3.5" /></Button>
                     </div>
                   ))
                 )}
-                <Button variant="link" size="sm" className="h-auto px-0" onClick={() => navigate('/alumni')}>
-                  Browse alumni directory
-                </Button>
+                <Button variant="link" size="sm" className="h-auto px-0" onClick={() => navigate('/alumni')}>Browse alumni directory</Button>
               </CardContent>
             </Card>
           )}
 
+          {/* Upcoming events */}
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <CardTitle>Upcoming events</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/events')}>
-                <CalendarDays className="h-3.5 w-3.5" />
-              </Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/events')}><CalendarDays className="h-3.5 w-3.5" /></Button>
             </CardHeader>
             <CardContent>
               {events.length === 0 ? (
@@ -411,9 +384,7 @@ export default function DashboardPage() {
                   {events.map((e) => (
                     <li key={e.id} className="flex items-start gap-3">
                       <div className="rounded-lg bg-accent px-2.5 py-1.5 text-center text-accent-foreground">
-                        <p className="text-[10px] font-semibold uppercase">
-                          {new Date(tsNum(e.date)).toLocaleString('default', { month: 'short' })}
-                        </p>
+                        <p className="text-[10px] font-semibold uppercase">{new Date(tsNum(e.date)).toLocaleString('default', { month: 'short' })}</p>
                         <p className="text-sm font-bold leading-none">{new Date(tsNum(e.date)).getDate()}</p>
                       </div>
                       <div className="min-w-0 flex-1">
@@ -427,23 +398,16 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Quick actions */}
           <Card>
-            <CardHeader>
-              <CardTitle>Quick actions</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Quick actions</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-2">
-              <Button variant="outline" className="justify-start" onClick={() => navigate('/alumni')}>
-                <Search className="h-4 w-4" /> Find alumni
-              </Button>
-              <Button variant="outline" className="justify-start" onClick={() => navigate('/mentorship')}>
-                <Sparkles className="h-4 w-4" /> Find mentor
-              </Button>
-              <Button variant="outline" className="justify-start" onClick={() => navigate('/jobs')}>
-                <Briefcase className="h-4 w-4" /> Jobs
-              </Button>
-              <Button variant="outline" className="justify-start" onClick={() => navigate('/events')}>
-                <CalendarDays className="h-4 w-4" /> Events
-              </Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/feed')}><Users className="h-4 w-4" /> Feed</Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/alumni')}><Search className="h-4 w-4" /> Find alumni</Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/mentorship')}><Sparkles className="h-4 w-4" /> Find mentor</Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/jobs')}><Briefcase className="h-4 w-4" /> Jobs</Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/events')}><CalendarDays className="h-4 w-4" /> Events</Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/messages')}><MessageSquare className="h-4 w-4" /> Messages</Button>
             </CardContent>
           </Card>
         </div>

@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   Flag,
   FileBarChart,
+  Rss,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
@@ -27,6 +29,7 @@ export interface NavItem {
 
 export const PRIMARY_NAV: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, end: true },
+  { label: 'Feed', to: '/feed', icon: Rss, roles: ['student', 'alumni'] },
   { label: 'Alumni', to: '/alumni', icon: GraduationCap, roles: ['student', 'alumni'] },
   { label: 'Messages', to: '/messages', icon: MessageSquare, badgeKey: 'messages', roles: ['student', 'alumni'] },
   { label: 'Connections', to: '/connections', icon: UserCheck, badgeKey: 'connections', roles: ['student', 'alumni'] },

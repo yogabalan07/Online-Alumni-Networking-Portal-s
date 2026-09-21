@@ -9,6 +9,7 @@ import RegisterPage from '@/pages/auth/RegisterPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import RoleSelectionPage from '@/pages/auth/RoleSelectionPage';
 import DashboardPage from '@/pages/DashboardPage';
+import CommunityFeedPage from '@/pages/CommunityFeedPage';
 import AlumniDirectoryPage from '@/pages/AlumniDirectoryPage';
 import MessagesPage from '@/pages/MessagesPage';
 import ConnectionsPage from '@/pages/ConnectionsPage';
@@ -19,6 +20,9 @@ import NotificationsPage from '@/pages/NotificationsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import FollowersPage from '@/pages/FollowersPage';
+import FollowingPage from '@/pages/FollowingPage';
+import UserViewPage from '@/pages/UserViewPage';
 
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
@@ -75,6 +79,7 @@ export function AppRoutes() {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/feed" element={<CommunityFeedPage />} />
         <Route path="/alumni" element={<AlumniDirectoryPage />} />
         <Route path="/messages" element={<MessagesPage />} />
         <Route path="/messages/:conversationId" element={<MessagesPage />} />
@@ -85,6 +90,9 @@ export function AppRoutes() {
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/followers" element={<FollowersPage />} />
+        <Route path="/following" element={<FollowingPage />} />
+        <Route path="/user/:uid" element={<UserViewPage />} />
       </Route>
 
       <Route

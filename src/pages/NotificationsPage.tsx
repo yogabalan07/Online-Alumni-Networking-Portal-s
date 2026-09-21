@@ -6,6 +6,9 @@ import {
   Briefcase,
   CalendarDays,
   GraduationCap,
+  Heart,
+  Lightbulb,
+  MessageCircle,
   MessageSquare,
   Shield,
   UserCheck,
@@ -35,6 +38,10 @@ const TYPE_ICONS: Record<NotificationType, typeof Bell> = {
   new_internship: Briefcase,
   event: CalendarDays,
   admin: Shield,
+  post_like: Heart,
+  post_comment: MessageCircle,
+  post_suggestion: Lightbulb,
+  new_follower: UserPlus,
 };
 
 export default function NotificationsPage() {

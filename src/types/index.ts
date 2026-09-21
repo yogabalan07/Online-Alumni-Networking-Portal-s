@@ -14,6 +14,17 @@ export type MentorshipStatus = 'pending' | 'accepted' | 'rejected' | 'completed'
 
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
 
+export type PostType =
+  | 'general'
+  | 'project'
+  | 'achievement'
+  | 'photo'
+  | 'question'
+  | 'career'
+  | 'job'
+  | 'internship'
+  | 'advice';
+
 export type NotificationType =
   | 'connection_request'
   | 'connection_accepted'
@@ -23,7 +34,11 @@ export type NotificationType =
   | 'new_job'
   | 'new_internship'
   | 'event'
-  | 'admin';
+  | 'admin'
+  | 'post_like'
+  | 'post_comment'
+  | 'post_suggestion'
+  | 'new_follower';
 
 export interface UserProfile {
   uid: string;
@@ -186,4 +201,60 @@ export interface Report {
 export interface PresenceState {
   state: string;
   lastChanged?: number;
+}
+
+export interface Post {
+  id: string;
+  authorId: string;
+  authorRole: UserRole;
+  authorName: string;
+  authorPhoto?: string;
+  content: string;
+  postType: PostType;
+  images: string[];
+  links: PostLink[];
+  projectTitle?: string;
+  projectDescription?: string;
+  projectSkills?: string[];
+  createdAt: number;
+  updatedAt: number;
+  likeCount: number;
+  commentCount: number;
+  suggestionCount: number;
+}
+
+export interface PostLink {
+  url: string;
+  label?: string;
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  userPhoto?: string;
+  userRole: UserRole;
+  text: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export interface PostSuggestion {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  userPhoto?: string;
+  userRole: UserRole;
+  text: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export interface Follow {
+  id: string;
+  followerId: string;
+  followingId: string;
+  createdAt: number;
 }

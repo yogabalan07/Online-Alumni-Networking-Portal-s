@@ -112,3 +112,14 @@ export async function uploadChatAttachment(
   const url = await uploadFile(path, file, onProgress);
   return { url, name: file.name, size: file.size, mimeType: file.type || `application/${ext}` };
 }
+
+export async function uploadPostImage(
+  uid: string,
+  file: File,
+  onProgress?: UploadProgress,
+): Promise<string> {
+  validateFile(file, 'image');
+  const ext = fileExtension(file.name) || 'png';
+  const path = `posts/${uid}/${Date.now()}.${ext}`;
+  return uploadFile(path, file, onProgress);
+}

@@ -246,5 +246,84 @@ service cloud.firestore {
       // Stats can be updated by authenticated users (for incrementing counters).
       allow write: if isAuth();
     }
+
+    // ==================== POSTS ====================
+    match /posts/{postId} {
+      // Anyone authenticated can read posts (community feed).
+      allow read: if isAuth();
+
+      // Students and alumni can create posts.
+      allow create: if isAuth() && (
+        getUserRole(request.auth.uid) == 'student' ||
+        getUserRole(request.auth.uid) == 'alumni'
+      );
+
+      // Only the author or admin can update posts.
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.authorId ||
+        isAdmin()
+      );
+
+      // Only the author or admin can delete posts.
+      allow delete: if isAuth() && (
+        request.auth.uid == resource.data.authorId ||
+        isAdmin()
+      );
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if isAuth();
+        allow create: if isAuth();
+        allow update: if isAuth() && (
+          request.auth.uid == resource.data.userId ||
+          isAdmin()
+        );
+        allow delete: if isAuth() && (
+          request.auth.uid == resource.data.userId ||
+          isAdmin()
+        );
+      }
+
+      // Suggestions subcollection
+      match /suggestions/{suggestionId} {
+        allow read: if isAuth();
+        allow create: if isAuth();
+        allow update: if isAuth() && (
+          request.auth.uid == resource.data.userId ||
+          isAdmin()
+        );
+        allow delete: if isAuth() && (
+          request.auth.uid == resource.data.userId ||
+          isAdmin()
+        );
+      }
+
+      // Likes subcollection
+      match /likes/{uid} {
+        allow read: if isAuth();
+        allow create: if isAuth() && request.auth.uid == uid;
+        allow delete: if isAuth() && request.auth.uid == uid;
+        allow update: if false;
+      }
+    }
+
+    // ==================== FOLLOWS ====================
+    match /follows/{followId} {
+      // Anyone authenticated can read follows.
+      allow read: if isAuth();
+
+      // Authenticated users can create follows (prevented by service logic from self-follow).
+      allow create: if isAuth() && (
+        request.auth.uid == request.resource.data.followerId
+      );
+
+      // No updates on follows.
+      allow update: if false;
+
+      // Only the follower can delete (unfollow).
+      allow delete: if isAuth() && (
+        request.auth.uid == resource.data.followerId
+      );
+    }
   }
 }

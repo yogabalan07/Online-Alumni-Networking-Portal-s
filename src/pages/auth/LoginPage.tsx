@@ -63,34 +63,40 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="relative hidden flex-col justify-between bg-gradient-to-br from-primary via-primary/90 to-indigo-700 p-10 text-primary-foreground lg:flex">
-        <div className="flex items-center gap-2">
+      <div className="relative hidden flex-col justify-between p-10 text-white lg:flex login-bg overflow-hidden">
+        {/* Floating shapes */}
+        <div className="login-floating-shape absolute -left-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="login-floating-shape absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-purple-400/20 blur-3xl" />
+        <div className="login-floating-shape absolute left-1/2 top-1/2 h-48 w-48 rounded-full bg-cyan-400/15 blur-2xl" />
+
+        <div className="relative z-10 flex items-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
             <GraduationCap className="h-6 w-6" />
           </div>
           <span className="text-lg font-bold">Alumni Networking Portal</span>
         </div>
-        <div>
+        <div className="relative z-10">
           <h1 className="max-w-md text-4xl font-extrabold leading-tight">
             Reconnect. Mentor. Grow your career.
           </h1>
-          <p className="mt-4 max-w-md text-primary-foreground/80">
+          <p className="mt-4 max-w-md text-white/80">
             A single place for students and alumni to connect, chat in real time, share opportunities,
             find mentors and grow together.
           </p>
-          <ul className="mt-6 space-y-2 text-sm text-primary-foreground/90">
+          <ul className="mt-6 space-y-2 text-sm text-white/90">
             <li>• Real-time messaging with file sharing</li>
             <li>• Mentorship and career guidance</li>
             <li>• Jobs, internships and alumni events</li>
+            <li>• Community feed and project sharing</li>
           </ul>
         </div>
-        <p className="text-xs text-primary-foreground/70">
+        <p className="relative z-10 text-xs text-white/60">
           © {new Date().getFullYear()} Alumni Networking Portal
         </p>
       </div>
 
       <div className="flex items-center justify-center bg-background px-5 py-12">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm animate-slide-up">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <GraduationCap className="h-6 w-6" />
